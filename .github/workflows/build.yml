@@ -1,0 +1,59 @@
+name: Build APK
+# Safety rules (audit step 0):
+#  - this workflow never unpacks sources, never commits and never pushes (read-only token)
+#  - it runs on main, import-sty, pull requests and by hand
+#  - unit tests are blocking: a red test makes the run red. The APK step still runs afterwards
+#    (if: always()) so you can install a build while looking at the failure.
+on:
+  push:
+    branches: [ main, import-sty ]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+      - name: Unit tests (STY parser, MIDI reader, drum map, offline audio render)
+        run: gradle testDebugUnitTest --no-daemon --stacktrace
+      - name: Show failed tests (also written to the run Summary page)
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, os
+          import xml.etree.ElementTree as ET
+          out = []
+          for f in sorted(glob.glob('app/build/test-results/testDebugUnitTest/*.xml')):
+              for tc in ET.parse(f).getroot().iter('testcase'):
+                  for kind in ('failure', 'error'):
+                      for e in tc.findall(kind):
+                          out.append(tc.get('classname') + '.' + tc.get('name') + ' -> ' + (e.get('message') or '')[:300])
+          text = '\n'.join(out) if out else 'No failed tests found'
+          print(text)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as s:
+              s.write('### Failed tests\n```\n' + text + '\n```\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+      - name: Build debug APK
+        if: always()
+        run: gradle assembleDebug --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: EthioYamaha-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: ignore

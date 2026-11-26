@@ -1,0 +1,40 @@
+name: Apply uploaded ZIP (new repo)
+# One-time helper. Delete this file after it has worked.
+# What it does: when you push to main and a zip named like ethio-yamaha-full-project.zip that contains an Android project (app/build.gradle.kts)
+# sits anywhere in the repository (any folder), it unpacks that zip, copies the project files over the repository
+# (never touching .git or .github), deletes the zip, and commits to main.
+# It never force-pushes, and ignores zips that are not a project (for example audio previews).
+on:
+  push:
+    branches: [ main ]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack project zips and commit
+        run: |
+          set -e
+          applied=0
+          mapfile -t zips < <(find . -iname '*ethio*full*project*.zip' -not -path './.git/*')
+          for z in "${zips[@]}"; do
+            tmp=$(mktemp -d)
+            unzip -q -o "$z" -d "$tmp" || { echo "skip $z (cannot unzip)"; continue; }
+            gradle_file=$(find "$tmp" -path '*/app/build.gradle.kts' -not -path '*/.git/*' | head -n 1)
+            if [ -z "$gradle_file" ]; then echo "skip $z (no app/build.gradle.kts inside)"; continue; fi
+            root=$(dirname "$(dirname "$gradle_file")")
+            echo "applying $z from ${root#$tmp/}"
+            (cd "$root" && tar cf - --exclude=.git --exclude=.github .) | tar xf -
+            git rm -q --cached "$z" 2>/dev/null || true
+            rm -f "$z"
+            applied=1
+          done
+          if [ "$applied" = "0" ]; then echo "nothing to apply"; exit 0; fi
+          git config user.name "zip-helper"
+          git config user.email "zip-helper@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply uploaded project zip" || { echo "no changes"; exit 0; }
+          git push origin HEAD:main
