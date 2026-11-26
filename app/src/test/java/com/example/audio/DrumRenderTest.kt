@@ -40,7 +40,7 @@ class DrumRenderTest {
 
     @Test fun panicFadesEveryDrumWithinAboutOneTenthOfASecond() {
         val e = SynthEngine()
-        e.send(Cmd(Op.NOTE_ON, 9, 49, 110))       // crash
+        e.send(Cmd(Op.NOTE_ON, 9, 53, 110))       // ride bell (crash cymbals are switched off in version 3)
         e.send(Cmd(Op.NOTE_ON, 9, 51, 110))
         e.renderOffline(512)
         e.send(Cmd(Op.PANIC))
@@ -64,7 +64,7 @@ class DrumRenderTest {
 
     @Test fun denseHitsStealQuietestVoicesWithoutOverflow() {
         val e = SynthEngine()
-        for (i in 0 until 60) e.send(Cmd(Op.NOTE_ON, 9, 49, 127))   // 60 crashes at once, pool is 48
+        for (i in 0 until 60) e.send(Cmd(Op.NOTE_ON, 9, 59, 127))   // 60 rides at once, pool is 48
         val out = e.renderOffline(8820)
         assertTrue(e.drumSteals >= 12)
         assertTrue(maxAbs(out) <= 32760)
@@ -83,14 +83,24 @@ class DrumRenderTest {
         return Math.sqrt(s / (to - from))
     }
 
-    @Test fun crashIsMetallicNotJustNoiseAndStillDecays() {
+    @Test fun crashCymbalsAreSwitchedOffAndNotCountedAsMissing() {
+        for (n in intArrayOf(49, 57, 52, 55)) {
+            val e = SynthEngine()
+            e.send(Cmd(Op.NOTE_ON, 9, n, 127))
+            val out = e.renderOffline(8820)
+            assertEquals("note $n must be silent", 0, maxAbs(out))
+            assertEquals(0, e.activeVoices)
+            assertEquals("a muted cymbal is not a missing sound", 0, e.drumSilentHits)
+        }
+    }
+
+    @Test fun rideCymbalStillRingsAndDecaysWithoutClipping() {
         val e = SynthEngine()
-        e.send(Cmd(Op.NOTE_ON, 9, 49, 110))
+        e.send(Cmd(Op.NOTE_ON, 9, 51, 110))
         val out = e.renderOffline(44100 * 4)
-        assertTrue("crash must sound", maxAbs(out, 0, 4410) > 300)
-        assertTrue("crash must not clip", maxAbs(out) <= 32000)
-        // out is interleaved stereo: sample index = frame * 2. 2.5 s = frame 110250 = index 220500
-        assertTrue("crash must be quieter after 2.5 s", rms(out, 220500, 221500) < rms(out, 2000, 3000) / 4)
+        assertTrue("ride must sound", maxAbs(out, 0, 4410) > 300)
+        assertTrue("ride must not clip", maxAbs(out) <= 32000)
+        assertTrue("ride must be quieter after 2.5 s", rms(out, 220500, 221500) < rms(out, 2000, 3000) / 4)
         assertEquals(0, e.activeVoices)
     }
 

@@ -16,6 +16,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.Chords
 import com.example.audio.Cmd
+import com.example.audio.DrumSampleSet
+import com.example.audio.MusicStudioKit
 import com.example.audio.Op
 import com.example.audio.Sec
 import com.example.audio.Styles
@@ -78,6 +80,9 @@ data class UiState(
     val measure: Int = 1,
     val beat: Int = 1,
     val chordText: String = "C Maj",
+    /** User chord mode: 0 = automatic, 1/2/3 = the chord changes only when that many keys are held. */
+    val chordKeys: Int = 0,
+    val kitName: String = "",
     val acmp: Boolean = true,
     val autoFill: Boolean = true,
     val syncStart: Boolean = false,
@@ -139,6 +144,7 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         loadUserLibrary()
+        restoreKit()
         engine.start(_ui.value.bufferFrames)
         applyAllToEngine()
         viewModelScope.launch {
@@ -176,6 +182,7 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
             styleVol = prefs.getFloat("styleVol", d.styleVol),
             reverb = prefs.getFloat("reverb", d.reverb),
             tone = prefs.getInt("tone", d.tone).coerceIn(0, 2),
+            chordKeys = prefs.getInt("chordKeys", 0).coerceIn(0, 3),
             regs = regs,
             tempo = Styles.all[0].tempo,
             timeSig = Styles.all[0].timeSig
@@ -260,7 +267,7 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
         active[n] = sent
         if (left && s.acmp) {
             leftHeld.add(n)
-            val c = Chords.detect(leftHeld)
+            val c = Chords.detectKeys(leftHeld, s.chordKeys)
             if (c != null) {
                 engine.send(Cmd(Op.CHORD, c[0], c[1]))
                 _ui.update { it.copy(chordText = Chords.name(c[0], c[1])) }
@@ -434,6 +441,12 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
     fun setReverb(v: Float) {
         engine.send(Cmd(Op.REVERB, f = v)); save { putFloat("reverb", v) }
         _ui.update { it.copy(reverb = v) }
+    }
+
+    fun setChordKeys(n: Int) {
+        leftHeld.clear()
+        _ui.update { it.copy(chordKeys = n.coerceIn(0, 3), banner = if (n <= 0) "CHORD: AUTO" else "CHORD: " + n + " KEY") }
+        save { putInt("chordKeys", n.coerceIn(0, 3)) }
     }
 
     fun toggleLock() = _ui.update { it.copy(panelLock = !it.panelLock, banner = if (!it.panelLock) "PANEL LOCK ON" else "PANEL LOCK OFF") }
@@ -699,7 +712,7 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
             Kind.MIDI -> userMsg(e.name + ": MIDI song playback is not in this version yet.")
             Kind.PAD -> userMsg(e.name + ": Multi Pad banks (.pad) are not in this version yet.")
             Kind.REGIST -> userMsg(e.name + ": registration banks (.RGT) are not in this version yet.")
-            Kind.INSTRUMENT -> userMsg(e.name + ": sampled voices (.Instrument) are not in this version yet.")
+            Kind.INSTRUMENT -> importKit(Library.docUri(Uri.parse(u.tree), e.docId), e.name)
             else -> {}
         }
     }
@@ -712,8 +725,40 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
             val name = Library.displayName(cr, uri)
             val k = Library.kindOf(name)
             if (k == Kind.YAMAHA_STY) importStyle(uri, name, "uri:" + uri)
+            else if (k == Kind.INSTRUMENT) importKit(uri, name)
             else if (k == Kind.ORG_STYLE || k == Kind.SET || k == Kind.OTHER) inspectFile(uri, name, "uri:" + uri)
             else userMsg(name + ": this file type cannot be imported in this version.")
+        }
+    }
+
+    private fun kitFile(): File = File(File(getApplication<Application>().filesDir, "library").also { it.mkdirs() }, "kit.instrument")
+
+    /** Music Studio drum kit (.Instrument): its sounds replace the built-in recorded drums note by note. Kept for the next start. */
+    private fun importKit(uri: Uri, name: String) {
+        _ui.update { it.copy(user = it.user.copy(busy = true, message = "Reading drum kit " + name + " ...")) }
+        viewModelScope.launch {
+            val res = withContext(Dispatchers.IO) {
+                runCatching {
+                    val bytes = Library.readBytes(getApplication<Application>().contentResolver, uri)
+                    val set = MusicStudioKit.parse(bytes) ?: throw FormatException("This is not a readable drum kit file (only drum kits are supported, not pitched voices)")
+                    kitFile().writeBytes(bytes)
+                    set
+                }
+            }
+            res.onSuccess { set ->
+                engine.setDrumSamples(DrumSampleSet.default.overlay(set))
+                _ui.update { it.copy(kitName = name, banner = "DRUM KIT: " + name) }
+                userMsg(name + ": drum kit loaded, " + set.noteCount + " sounds. Notes the kit does not have keep the built-in drums.")
+            }.onFailure { err ->
+                userMsg(name + ": " + (if (err is FormatException) err.message ?: "Unsupported file" else "Could not read the file"))
+            }
+        }
+    }
+
+    private fun restoreKit() {
+        viewModelScope.launch {
+            val set = withContext(Dispatchers.IO) { runCatching { kitFile().takeIf { it.exists() }?.readBytes()?.let { MusicStudioKit.parse(it) } }.getOrNull() }
+            if (set != null) engine.setDrumSamples(DrumSampleSet.default.overlay(set))
         }
     }
 

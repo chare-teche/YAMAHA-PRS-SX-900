@@ -74,6 +74,33 @@ object Chords {
     fun name(root: Int, q: Int): String =
         NOTE_NAMES[((root % 12) + 12) % 12] + " " + NAMES[q.coerceIn(0, NAMES.size - 1)]
 
+    /**
+     * User chord mode: the chord only changes when at least [keys] keys are held (null = keep the old chord).
+     *  1 key : one key plays the major chord of that note; more keys use the normal detection.
+     *  2 keys: lowest key is the root, the second key chooses the chord (major 3rd = major, minor 3rd = minor,
+     *          5th = major, minor 7th = dominant 7th, major 7th = maj7, 2nd = sus2, 4th = sus4); anything else is detected normally.
+     *  3 keys: normal detection of the three keys.
+     */
+    fun detectKeys(notes: Collection<Int>, keys: Int): IntArray? {
+        if (keys <= 0) return detect(notes)
+        if (notes.size < keys) return null
+        if (keys == 1) return if (notes.size == 1) intArrayOf(notes.first() % 12, 0) else detect(notes)
+        if (keys == 2 && notes.size == 2) {
+            val s = notes.sorted()
+            val root = s[0] % 12
+            return when (((s[1] - s[0]) % 12 + 12) % 12) {
+                4, 7 -> intArrayOf(root, 0)
+                3 -> intArrayOf(root, 1)
+                10 -> intArrayOf(root, 2)
+                11 -> intArrayOf(root, 3)
+                2 -> intArrayOf(root, 6)
+                5 -> intArrayOf(root, 5)
+                else -> detect(notes)
+            }
+        }
+        return detect(notes)
+    }
+
     /** Finds root and quality from the notes held in the chord area. Returns null if unknown. */
     fun detect(notes: Collection<Int>): IntArray? {
         if (notes.isEmpty()) return null

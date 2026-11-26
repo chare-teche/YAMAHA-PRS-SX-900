@@ -247,7 +247,10 @@ class SynthEngine {
     /** Kit of the current style (see DrumKit): tunes pitch and decay of the synthesized drums. */
     private var drumKit = DrumKit.STANDARD
     /** Recorded drum samples. Set to DrumSampleSet.EMPTY to force the synthesized drums (tests). */
-    internal var drumSamples: DrumSampleSet = DrumSampleSet.default
+    @Volatile internal var drumSamples: DrumSampleSet = DrumSampleSet.default
+
+    /** Replaces the drum samples (a kit imported by the user). Safe while playing: the audio thread reads the reference once per hit. */
+    fun setDrumSamples(set: DrumSampleSet) { drumSamples = if (set.noteCount > 0) set else DrumSampleSet.default }
 
     // ---- master tone: 4 biquads (low shelf, low-mid cut, presence, high shelf) on the final stereo mix ----
     private val eqC = FloatArray(Tone.BANDS * 5)     // b0 b1 b2 a1 a2 per band (a0 = 1)
@@ -923,6 +926,7 @@ class SynthEngine {
 
     // ---- drums ----
     private fun drumOn(note: Int, vel: Int, fromSeq: Boolean) {
+        if (DrumMap.isMuted(note)) return          // crash cymbals are off (DrumMap.isMuted)
         val kind = DrumMap.kindOf(note)
         if (kind == DrumMap.SILENT) { drumSilentHits++; return }
         val freq = DrumMap.freqOf(note)

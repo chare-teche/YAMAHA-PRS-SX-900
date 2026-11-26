@@ -20,6 +20,12 @@ class DrumSample(val name: String, val rate: Int, val pcm: ShortArray) {
  */
 class DrumSampleSet private constructor(private val byNote: Array<DrumSample?>) {
     fun get(note: Int): DrumSample? = if (note in 0..127) byNote[note] else null
+    /** A new set: every note of [over] replaces this set's sample, other notes keep this set's sample. */
+    fun overlay(over: DrumSampleSet): DrumSampleSet {
+        val a = arrayOfNulls<DrumSample>(128)
+        for (n in 0..127) a[n] = over.byNote[n] ?: byNote[n]
+        return DrumSampleSet(a)
+    }
     val noteCount: Int get() = byNote.count { it != null }
     fun notes(): List<Int> = (0..127).filter { byNote[it] != null }
     val totalBytes: Int get() = byNote.filterNotNull().distinct().sumOf { it.pcm.size * 2 }
@@ -27,6 +33,12 @@ class DrumSampleSet private constructor(private val byNote: Array<DrumSample?>) 
     companion object {
         const val RESOURCE = "/ethio_drums.bin"
         val EMPTY = DrumSampleSet(arrayOfNulls(128))
+
+        fun fromMap(m: Map<Int, DrumSample>): DrumSampleSet {
+            val a = arrayOfNulls<DrumSample>(128)
+            for ((n, s) in m) if (n in 0..127) a[n] = s
+            return DrumSampleSet(a)
+        }
 
         /** The packaged set, loaded once on first use. */
         val default: DrumSampleSet by lazy {

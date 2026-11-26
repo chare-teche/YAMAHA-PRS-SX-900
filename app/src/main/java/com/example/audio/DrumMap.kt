@@ -71,6 +71,12 @@ object DrumMap {
         // everything else (0-27, 29, 30, 88-127) stays SILENT
     }
 
+    /**
+     * Crash-family cymbals (crash 1/2, Chinese, splash) are switched off on purpose (version 3, requested by the user:
+     * they were harsh). They make no sound and are not counted as missing sounds. To bring them back, return false.
+     */
+    fun isMuted(note: Int): Boolean = note == 49 || note == 57 || note == 52 || note == 55
+
     fun kindOf(note: Int): Int = if (note in 0..127) kinds[note] else SILENT
     fun freqOf(note: Int): Float = if (note in 0..127) freqs[note] else 600f
 

@@ -53,7 +53,7 @@ fun OverlayHost(vm: ArrangerViewModel, s: UiState) {
     val title = when (scr) {
         Screen.VOICE -> "VOICE SELECT"
         Screen.STYLE -> "STYLE SELECT"
-        Screen.MIXER -> "MIXER"
+        Screen.MIXER -> "SLIDER"
         Screen.PADS -> "MULTI PAD"
         Screen.REGIST -> "REGISTRATION MEMORY"
         Screen.SETTINGS -> "SETTINGS"
@@ -110,12 +110,13 @@ private fun SectionTitle(text: String) {
 
 /** P1, P2, P3 ... tab row. Pages hold [per] items each; at least 3 tabs are shown. */
 @Composable
-private fun PageTabs(total: Int, per: Int, page: Int, onPage: (Int) -> Unit) {
+private fun PageTabs(total: Int, per: Int, page: Int, onPlus: (() -> Unit)? = null, onPage: (Int) -> Unit) {
     val pages = maxOf(3, (total + per - 1) / per)
-    Row(Modifier.fillMaxWidth().height(38.dp)) {
+    Row(Modifier.fillMaxWidth().height(40.dp)) {
         for (i in 0 until pages) {
-            PanelButton("P" + (i + 1), Modifier.width(64.dp).fillMaxHeight(), page == i, Pal.gold, fontSize = 11f) { onPage(i) }
+            PanelButton("P" + (i + 1), Modifier.width(56.dp).fillMaxHeight(), page == i, Pal.gold, fontSize = 11f) { onPage(i) }
         }
+        if (onPlus != null) PanelButton("+", Modifier.width(56.dp).fillMaxHeight(), false, Pal.green, fontSize = 16f) { onPlus() }
     }
 }
 
@@ -158,11 +159,10 @@ private fun VoicePage(vm: ArrangerViewModel, s: UiState) {
             )
         }
         var page by remember { mutableStateOf(0) }
-        val per = 5
+        val per = 8
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            PageTabs(Voices.ALL.size, per, page) { page = it }
             LazyVerticalGrid(
-                GridCells.Adaptive(150.dp), Modifier.weight(1f).fillMaxWidth(),
+                GridCells.Fixed(2), Modifier.weight(1f).fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val from = page * per
@@ -176,6 +176,9 @@ private fun VoicePage(vm: ArrangerViewModel, s: UiState) {
                     ) { vm.setPartVoice(sel, i) }
                 }
             }
+            // + adds a Music Studio drum kit (.Instrument). Pitched voices from files are not supported yet.
+            PageTabs(Voices.ALL.size, per, page, { vm.requestImportFiles() }) { page = it }
+            if (s.kitName.isNotEmpty()) Text("Drum kit: " + s.kitName, color = Pal.gold, fontSize = fsp(8f))
         }
     }
 }
@@ -185,27 +188,40 @@ private fun VoicePage(vm: ArrangerViewModel, s: UiState) {
 // ----------------------------------------------------------------------
 @Composable
 private fun StylePage(vm: ArrangerViewModel, s: UiState) {
-    Column(Modifier.fillMaxSize()) {
-        var page by remember { mutableStateOf(0) }
-        val per = 8
-        PageTabs(Styles.all.size, per, page) { page = it }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            val from = page * per
-            val to = minOf(Styles.all.size, from + per)
-            items(maxOf(0, to - from)) { k ->
-                val i = from + k
-                val st = Styles.all[i]
-                PanelButton(
-                    st.name + "   -   " + st.category + "   -   " + st.tempo + " BPM   -   " + st.timeSig,
-                    Modifier.fillMaxWidth().height(46.dp), s.styleIdx == i, Pal.orange, fontSize = 11f
-                ) { vm.selectStyle(i) }
+    val cats = listOf("ALL") + Styles.all.map { it.category }.distinct()
+    var cat by remember { mutableStateOf(0) }
+    var page by remember { mutableStateOf(0) }
+    val idxs = (0 until Styles.all.size).filter { cat == 0 || cat >= cats.size || Styles.all[it].category == cats[cat] }
+    val per = 8
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.width(120.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
+            for (ci in cats.indices) {
+                PanelButton(cats[ci], Modifier.fillMaxWidth().height(40.dp), cat == ci, Pal.orange, fontSize = 10f) { cat = ci; page = 0 }
             }
         }
-        Text(
-            "Built-in styles are generated patterns. Imported Yamaha .STY styles appear here as User styles; " +
-                "use USER on the main screen to browse folders. ORG, SET, MIDI and pad files are not supported yet.",
-            color = Pal.dim, fontSize = fsp(8f), modifier = Modifier.padding(top = 6.dp)
-        )
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            LazyVerticalGrid(
+                GridCells.Fixed(2), Modifier.weight(1f).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val from = page * per
+                val to = minOf(idxs.size, from + per)
+                items(maxOf(0, to - from)) { k ->
+                    val i = idxs[from + k]
+                    val st = Styles.all[i]
+                    PanelButton(
+                        st.name + "\n" + st.category + "  " + st.tempo + " BPM  " + st.timeSig,
+                        Modifier.fillMaxWidth().height(58.dp), s.styleIdx == i, Pal.orange, fontSize = 11f
+                    ) { vm.selectStyle(i) }
+                }
+            }
+            // + adds Yamaha .STY styles (and shows what an ORG .style file contains)
+            PageTabs(idxs.size, per, page, { vm.requestImportFiles() }) { page = it }
+            Text(
+                "+ imports .STY / .style files. Imported styles appear under their category in these pages.",
+                color = Pal.dim, fontSize = fsp(8f), modifier = Modifier.padding(top = 4.dp)
+            )
+        }
     }
 }
 
@@ -253,7 +269,7 @@ private fun MixerPage(vm: ArrangerViewModel, s: UiState) {
 //  MULTI PADS (real drum / percussion hits)
 // ----------------------------------------------------------------------
 private val PADS = listOf(
-    "CRASH" to 49, "KICK" to 36, "SNARE" to 38, "TAMBOURINE" to 54,
+    "SHAKER" to 82, "KICK" to 36, "SNARE" to 38, "TAMBOURINE" to 54,
     "CLAP" to 39, "TOM" to 45, "CONGA" to 62, "COWBELL" to 56
 )
 

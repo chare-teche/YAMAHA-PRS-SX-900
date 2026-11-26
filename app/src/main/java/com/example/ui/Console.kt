@@ -180,7 +180,7 @@ private fun Lcd(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
             MenuItem("USER", "Folders and files", orange, Modifier.weight(1f)) { vm.openUserPage() }
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
-            MenuItem("Mixer", "Track levels", orange, Modifier.weight(1f)) { vm.openScreen(Screen.MIXER) }
+            MenuItem("Slider", "Track levels", orange, Modifier.weight(1f)) { vm.openScreen(Screen.MIXER) }
             MenuItem("Multi Pad", "Drum hits", blue, Modifier.weight(1f)) { vm.openScreen(Screen.PADS) }
             MenuItem("Registration", "Store / recall", blue, Modifier.weight(1f)) { vm.openScreen(Screen.REGIST) }
         }
@@ -243,7 +243,7 @@ private fun RightControls(vm: ArrangerViewModel, s: UiState, modifier: Modifier)
         Row(Modifier.fillMaxWidth().weight(1f)) {
             PanelButton("STYLE", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.STYLE, fontSize = 7f) { vm.openScreen(Screen.STYLE) }
             PanelButton("VOICE", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.VOICE, fontSize = 7f) { vm.openScreen(Screen.VOICE) }
-            PanelButton("MIXER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.MIXER, fontSize = 7f) { vm.openScreen(Screen.MIXER) }
+            PanelButton("SLIDER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.MIXER, fontSize = 7f) { vm.openScreen(Screen.MIXER) }
             PanelButton("MULTI PAD", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.PADS, fontSize = 7f) { vm.openScreen(Screen.PADS) }
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
@@ -253,10 +253,10 @@ private fun RightControls(vm: ArrangerViewModel, s: UiState, modifier: Modifier)
             PanelButton("RESET TEMPO", Modifier.weight(1f).fillMaxHeight(), fontSize = 7f) { vm.resetTempo() }
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
-            PanelButton("LEFT", Modifier.weight(1f).fillMaxHeight(), s.parts[3].enabled, fontSize = 7f) { vm.togglePart(3) }
-            PanelButton("RIGHT 1", Modifier.weight(1f).fillMaxHeight(), s.parts[0].enabled, fontSize = 7f) { vm.togglePart(0) }
-            PanelButton("RIGHT 2", Modifier.weight(1f).fillMaxHeight(), s.parts[1].enabled, fontSize = 7f) { vm.togglePart(1) }
-            PanelButton("RIGHT 3", Modifier.weight(1f).fillMaxHeight(), s.parts[2].enabled, fontSize = 7f) { vm.togglePart(2) }
+            PanelButton("CHORD\nAUTO", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 0, Pal.green, fontSize = 7f) { vm.setChordKeys(0) }
+            PanelButton("1 KEY\nCHORD", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 1, Pal.green, fontSize = 7f) { vm.setChordKeys(1) }
+            PanelButton("2 KEY\nCHORD", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 2, Pal.green, fontSize = 7f) { vm.setChordKeys(2) }
+            PanelButton("3 KEY\nCHORD", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 3, Pal.green, fontSize = 7f) { vm.setChordKeys(3) }
         }
         Row(Modifier.fillMaxWidth().weight(0.8f)) {
             PanelButton("PANEL LOCK", Modifier.weight(1f).fillMaxHeight(), s.panelLock, Pal.orange, fontSize = 7f) { vm.toggleLock() }
