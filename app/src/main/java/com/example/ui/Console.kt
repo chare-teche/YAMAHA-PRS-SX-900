@@ -81,14 +81,14 @@ private fun PanelArea(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
         modifier.background(bodyBrush()).padding(horizontal = 4.dp, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Speaker(Modifier.weight(0.5f).fillMaxHeight())
+        Speaker(Modifier.weight(0.8f).fillMaxHeight())
         LeftControls(vm, s, Modifier.weight(1.55f).fillMaxHeight())
         Column(Modifier.weight(2.7f).fillMaxHeight()) {
             Lcd(vm, s, Modifier.weight(1f).fillMaxWidth())
             OtsRow(vm, s, Modifier.fillMaxWidth().height(26.dp * LocalScale.current))
         }
-        RightControls(vm, s, Modifier.weight(1.7f).fillMaxHeight())
-        Speaker(Modifier.weight(0.5f).fillMaxHeight())
+        RightControls(vm, s, Modifier.weight(1.9f).fillMaxHeight())
+        Speaker(Modifier.weight(0.8f).fillMaxHeight())
     }
 }
 
@@ -115,34 +115,47 @@ private fun Speaker(modifier: Modifier) {
 @Composable
 private fun LeftControls(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
     val part = s.parts[s.selectedPart]
-    Column(modifier.clip(RoundedCornerShape(5.dp)).background(boxBrush()).border(1.dp, Pal.edge, RoundedCornerShape(5.dp)).padding(2.dp)) {
-        Row(Modifier.fillMaxWidth().weight(1.7f)) {
-            Knob("MASTER", s.masterVol, { vm.setMaster(it) }, Modifier.weight(1.3f).fillMaxHeight())
-            Knob("BALANCE", s.styleVol, { vm.setStyleVol(it) }, Modifier.weight(1f).fillMaxHeight())
+    Column(modifier.clip(RoundedCornerShape(5.dp)).background(boxBrush()).border(1.dp, Color(0xFF4A4E56), RoundedCornerShape(5.dp)).padding(3.dp)) {
+        // top: MASTER knob + the eight style-track keys
+        Row(Modifier.fillMaxWidth().weight(1.5f)) {
+            Knob("MASTER", s.masterVol, { vm.setMaster(it) }, Modifier.weight(1f).fillMaxHeight())
+            Column(Modifier.weight(2.3f).fillMaxHeight()) {
+                Text("STYLE TRACKS", color = Pal.gold, fontSize = fsp(6f), textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth().weight(1f)) { for (i in 0..3) TrackBtn(vm, s, i, Modifier.weight(1f)) }
+                Row(Modifier.fillMaxWidth().weight(1f)) { for (i in 4..7) TrackBtn(vm, s, i, Modifier.weight(1f)) }
+            }
+        }
+        // middle: BALANCE and REVERB knobs + tempo / octave / transpose
+        Row(Modifier.fillMaxWidth().weight(1.5f)) {
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                Knob("BALANCE", s.styleVol, { vm.setStyleVol(it) }, Modifier.weight(1f).fillMaxWidth())
+            }
+            Column(Modifier.weight(2.3f).fillMaxHeight()) {
+                Row(Modifier.fillMaxWidth().weight(1f)) {
+                    Group("TEMPO " + s.tempo, 1f) {
+                        HwButton("-", Modifier.weight(1f).fillMaxHeight()) { vm.nudgeTempo(-1) }
+                        HwButton("+", Modifier.weight(1f).fillMaxHeight()) { vm.nudgeTempo(1) }
+                    }
+                    Group("OCTAVE " + (if (part.octave > 0) "+" else "") + part.octave, 1f) {
+                        HwButton("-", Modifier.weight(1f).fillMaxHeight()) { vm.setPartOctave(s.selectedPart, part.octave - 1) }
+                        HwButton("+", Modifier.weight(1f).fillMaxHeight()) { vm.setPartOctave(s.selectedPart, part.octave + 1) }
+                    }
+                    Group("TRAN " + (if (s.transpose > 0) "+" else "") + s.transpose, 1f) {
+                        HwButton("-", Modifier.weight(1f).fillMaxHeight()) { vm.transpose(-1) }
+                        HwButton("+", Modifier.weight(1f).fillMaxHeight()) { vm.transpose(1) }
+                    }
+                }
+            }
+        }
+        // bottom: REVERB knob + fill / fade / sync keys
+        Row(Modifier.fillMaxWidth().weight(1.3f)) {
             Knob("REVERB", s.reverb, { vm.setReverb(it) }, Modifier.weight(1f).fillMaxHeight())
-        }
-        Text("STYLE TRACKS  (tap to mute)", color = Pal.gold, fontSize = fsp(6f), textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.fillMaxWidth())
-        Row(Modifier.fillMaxWidth().weight(1f)) { for (i in 0..3) TrackBtn(vm, s, i, Modifier.weight(1f)) }
-        Row(Modifier.fillMaxWidth().weight(1f)) { for (i in 4..7) TrackBtn(vm, s, i, Modifier.weight(1f)) }
-        Row(Modifier.fillMaxWidth().weight(1.35f)) {
-            Group("TEMPO " + s.tempo, 1f) {
-                PanelButton("-", Modifier.weight(1f).fillMaxHeight(), fontSize = 11f) { vm.nudgeTempo(-1) }
-                PanelButton("+", Modifier.weight(1f).fillMaxHeight(), fontSize = 11f) { vm.nudgeTempo(1) }
+            Row(Modifier.weight(2.3f).fillMaxHeight()) {
+                HwButton("AUTO FILL", Modifier.weight(1f).fillMaxHeight(), s.autoFill, Pal.green) { vm.toggleAutoFill() }
+                HwButton("FADE", Modifier.weight(1f).fillMaxHeight(), s.fadeActive, Pal.gold) { vm.toggleFade() }
+                HwButton("SYNC START", Modifier.weight(1f).fillMaxHeight(), s.syncStart) { vm.toggleSyncStart() }
+                HwButton("SYNC STOP", Modifier.weight(1f).fillMaxHeight(), s.syncStop) { vm.toggleSyncStop() }
             }
-            Group("OCTAVE " + (if (part.octave > 0) "+" else "") + part.octave, 1f) {
-                PanelButton("-", Modifier.weight(1f).fillMaxHeight(), fontSize = 11f) { vm.setPartOctave(s.selectedPart, part.octave - 1) }
-                PanelButton("+", Modifier.weight(1f).fillMaxHeight(), fontSize = 11f) { vm.setPartOctave(s.selectedPart, part.octave + 1) }
-            }
-            Group("TRANSPOSE " + (if (s.transpose > 0) "+" else "") + s.transpose, 1f) {
-                PanelButton("-", Modifier.weight(1f).fillMaxHeight(), fontSize = 11f) { vm.transpose(-1) }
-                PanelButton("+", Modifier.weight(1f).fillMaxHeight(), fontSize = 11f) { vm.transpose(1) }
-            }
-        }
-        Row(Modifier.fillMaxWidth().weight(1f)) {
-            PanelButton("AUTO FILL", Modifier.weight(1f).fillMaxHeight(), s.autoFill, Pal.green, fontSize = 7f) { vm.toggleAutoFill() }
-            PanelButton("FADE", Modifier.weight(1f).fillMaxHeight(), s.fadeActive, Pal.gold, fontSize = 7f) { vm.toggleFade() }
-            PanelButton("SYNC START", Modifier.weight(1f).fillMaxHeight(), s.syncStart, fontSize = 7f) { vm.toggleSyncStart() }
-            PanelButton("SYNC STOP", Modifier.weight(1f).fillMaxHeight(), s.syncStop, fontSize = 7f) { vm.toggleSyncStop() }
         }
     }
 }
@@ -150,7 +163,7 @@ private fun LeftControls(vm: ArrangerViewModel, s: UiState, modifier: Modifier) 
 @Composable
 private fun TrackBtn(vm: ArrangerViewModel, s: UiState, i: Int, modifier: Modifier) {
     val label = listOf("RHY 1", "RHY 2", "BASS", "CHORD 1", "CHORD 2", "PAD", "PHR 1", "PHR 2")[i]
-    PanelButton(label, modifier.fillMaxHeight(), !s.trackMute[i], Pal.green, fontSize = 7f) { vm.toggleTrackMute(i) }
+    HwButton(label, modifier.fillMaxHeight(), !s.trackMute[i], Pal.green) { vm.toggleTrackMute(i) }
 }
 
 // ----------------------------------------------------------------------
@@ -229,37 +242,46 @@ private fun OtsRow(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
 // ----------------------------------------------------------------------
 @Composable
 private fun RightControls(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(5.dp)).background(boxBrush()).border(1.dp, Pal.edge, RoundedCornerShape(5.dp)).padding(2.dp)) {
-        Row(Modifier.fillMaxWidth().weight(0.8f)) {
-            PanelButton("MENU", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.SETTINGS, fontSize = 8f) { vm.openScreen(Screen.SETTINGS) }
-            PanelButton("EXIT", Modifier.weight(1f).fillMaxHeight(), fontSize = 8f) { vm.openScreen(null) }
-        }
-        Row(Modifier.fillMaxWidth().weight(2.4f), verticalAlignment = Alignment.CenterVertically) {
-            PanelButton("<", Modifier.width(26.dp).fillMaxHeight(0.45f), fontSize = 11f) { vm.nudgeTempo(-1) }
-            DataWheel({ vm.nudgeTempo(it) }, Modifier.weight(1f).fillMaxHeight().padding(2.dp))
-            PanelButton(">", Modifier.width(26.dp).fillMaxHeight(0.45f), fontSize = 11f) { vm.nudgeTempo(1) }
-        }
-        Text("DATA WHEEL = TEMPO  " + s.tempo, color = Pal.dim, fontSize = fsp(6.5f), textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.fillMaxWidth())
+    Column(modifier.clip(RoundedCornerShape(5.dp)).background(boxBrush()).border(1.dp, Color(0xFF4A4E56), RoundedCornerShape(5.dp)).padding(3.dp)) {
         Row(Modifier.fillMaxWidth().weight(1f)) {
-            PanelButton("STYLE", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.STYLE, fontSize = 7f) { vm.openScreen(Screen.STYLE) }
-            PanelButton("VOICE", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.VOICE, fontSize = 7f) { vm.openScreen(Screen.VOICE) }
-            PanelButton("SLIDER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.MIXER, fontSize = 7f) { vm.openScreen(Screen.MIXER) }
-            PanelButton("MULTI PAD", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.PADS, fontSize = 7f) { vm.openScreen(Screen.PADS) }
-        }
-        Row(Modifier.fillMaxWidth().weight(1f)) {
-            PanelButton("REGIST", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.REGIST, fontSize = 7f) { vm.openScreen(Screen.REGIST) }
-            PanelButton("ACMP", Modifier.weight(1f).fillMaxHeight(), s.acmp, Pal.green, fontSize = 7f) { vm.toggleAcmp() }
-            PanelButton("TAP TEMPO", Modifier.weight(1f).fillMaxHeight(), fontSize = 7f) { vm.tapTempo() }
-            PanelButton("RESET TEMPO", Modifier.weight(1f).fillMaxHeight(), fontSize = 7f) { vm.resetTempo() }
-        }
-        Row(Modifier.fillMaxWidth().weight(1f)) {
-            PanelButton("CHORD\nAUTO", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 0, Pal.green, fontSize = 7f) { vm.setChordKeys(0) }
-            PanelButton("1 KEY\nCHORD", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 1, Pal.green, fontSize = 7f) { vm.setChordKeys(1) }
-            PanelButton("2 KEY\nCHORD", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 2, Pal.green, fontSize = 7f) { vm.setChordKeys(2) }
-            PanelButton("3 KEY\nCHORD", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 3, Pal.green, fontSize = 7f) { vm.setChordKeys(3) }
-        }
-        Row(Modifier.fillMaxWidth().weight(0.8f)) {
-            PanelButton("PANEL LOCK", Modifier.weight(1f).fillMaxHeight(), s.panelLock, Pal.orange, fontSize = 7f) { vm.toggleLock() }
+            // left half: menu / exit, big data wheel, tempo arrows
+            Column(Modifier.weight(1.15f).fillMaxHeight()) {
+                Row(Modifier.fillMaxWidth().weight(0.55f)) {
+                    HwButton("MENU", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.SETTINGS) { vm.openScreen(Screen.SETTINGS) }
+                    HwButton("EXIT", Modifier.weight(1f).fillMaxHeight()) { vm.openScreen(null) }
+                }
+                DataWheel({ vm.nudgeTempo(it) }, Modifier.fillMaxWidth().weight(1.5f).padding(2.dp))
+                Row(Modifier.fillMaxWidth().weight(0.5f), verticalAlignment = Alignment.CenterVertically) {
+                    HwButton("<", Modifier.weight(1f).fillMaxHeight()) { vm.nudgeTempo(-1) }
+                    HwButton(">", Modifier.weight(1f).fillMaxHeight()) { vm.nudgeTempo(1) }
+                }
+                Text("WHEEL = TEMPO " + s.tempo, color = Pal.dim, fontSize = fsp(6f), textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.fillMaxWidth())
+            }
+            // right half: function keys (label above each key)
+            Column(Modifier.weight(1.9f).fillMaxHeight()) {
+                Row(Modifier.fillMaxWidth().weight(1f)) {
+                    HwButton("STYLE", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.STYLE) { vm.openScreen(Screen.STYLE) }
+                    HwButton("VOICE", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.VOICE) { vm.openScreen(Screen.VOICE) }
+                    HwButton("SLIDER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.MIXER) { vm.openScreen(Screen.MIXER) }
+                    HwButton("MULTI PAD", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.PADS) { vm.openScreen(Screen.PADS) }
+                }
+                Row(Modifier.fillMaxWidth().weight(1f)) {
+                    HwButton("REGIST", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.REGIST) { vm.openScreen(Screen.REGIST) }
+                    HwButton("ACMP", Modifier.weight(1f).fillMaxHeight(), s.acmp, Pal.green) { vm.toggleAcmp() }
+                    HwButton("TAP TEMPO", Modifier.weight(1f).fillMaxHeight()) { vm.tapTempo() }
+                    HwButton("RESET TEMPO", Modifier.weight(1f).fillMaxHeight()) { vm.resetTempo() }
+                }
+                Row(Modifier.fillMaxWidth().weight(1f)) {
+                    HwButton("CHORD AUTO", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 0, Pal.green) { vm.setChordKeys(0) }
+                    HwButton("1 KEY CHORD", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 1, Pal.green) { vm.setChordKeys(1) }
+                    HwButton("2 KEY CHORD", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 2, Pal.green) { vm.setChordKeys(2) }
+                    HwButton("3 KEY CHORD", Modifier.weight(1f).fillMaxHeight(), s.chordKeys == 3, Pal.green) { vm.setChordKeys(3) }
+                }
+                Row(Modifier.fillMaxWidth().weight(1f)) {
+                    HwButton("PANEL LOCK", Modifier.weight(1f).fillMaxHeight(), s.panelLock, Pal.orange) { vm.toggleLock() }
+                    Box(Modifier.weight(3f).fillMaxHeight())
+                }
+            }
         }
     }
 }
@@ -280,7 +302,11 @@ private fun SecButton(vm: ArrangerViewModel, s: UiState, sec: Sec, label: String
 @Composable
 private fun RowScope.Group(title: String, weight: Float, content: @Composable RowScope.() -> Unit) {
     Column(Modifier.weight(weight).fillMaxHeight().padding(horizontal = 2.dp)) {
-        Text(title, color = Pal.gold, fontSize = fsp(6.5f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.fillMaxWidth())
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).height(1.dp).background(Color(0xFF8A8F98)))
+            Text(" " + title + " ", color = Color(0xFFE6E8EB), fontSize = fsp(6.5f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1)
+            Box(Modifier.weight(1f).height(1.dp).background(Color(0xFF8A8F98)))
+        }
         Row(Modifier.fillMaxWidth().weight(1f), content = content)
     }
 }

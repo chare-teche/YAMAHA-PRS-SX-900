@@ -115,6 +115,57 @@ fun PanelButton(
     }
 }
 
+/**
+ * Hardware-style key like the real panel: the label is printed ABOVE a plain grey key, and a small LED bar on the key lights up
+ * when the function is on. Used for the upper panel buttons.
+ */
+@Composable
+fun HwButton(
+    label: String,
+    modifier: Modifier = Modifier,
+    active: Boolean = false,
+    activeColor: Color = Pal.blue,
+    fontSize: Float = 6.5f,
+    onClick: () -> Unit
+) {
+    var pressed by remember { mutableStateOf(false) }
+    val cb by rememberUpdatedState(onClick)
+    val shape = RoundedCornerShape(3.dp)
+    val top = if (pressed) Color(0xFF7A7F88) else Color(0xFF5E6269)
+    val bottom = if (pressed) Color(0xFF3A3E44) else Color(0xFF2B2E33)
+    Column(modifier.padding(horizontal = 1.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            label, color = Color(0xFFD3D6DB), fontSize = fsp(fontSize), fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Clip,
+            lineHeight = fsp(fontSize * 1.05f), modifier = Modifier.fillMaxWidth()
+        )
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(top = 1.dp, bottom = 1.dp)
+                .clip(shape)
+                .background(Brush.verticalGradient(listOf(top, bottom)))
+                .border(1.dp, Color(0xFF787D86), shape)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                        onTap = { cb() }
+                    )
+                },
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                Modifier
+                    .padding(top = 3.dp)
+                    .fillMaxWidth(0.45f)
+                    .height(2.dp)
+                    .background(if (active) activeColor else Color(0xFF0A0B0D))
+            )
+        }
+    }
+}
+
 /** Rotary knob. Drag up/down to change. */
 @Composable
 fun Knob(label: String, value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier) {
@@ -134,32 +185,27 @@ fun Knob(label: String, value: Float, onChange: (Float) -> Unit, modifier: Modif
         ) {
             val r = min(size.width, size.height) / 2f * 0.92f
             val c = Offset(size.width / 2f, size.height / 2f)
+            val stroke = r * 0.10f
+            val warm = Color(0xFFE9A640)
+            drawArc(
+                Color(0xFF3A3D43), 135f, 270f, false,
+                topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2),
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                warm, 135f, 270f * value, false,
+                topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2),
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            drawCircle(Color(0xFF000000), r * 0.80f, c)
             drawCircle(
-                Brush.radialGradient(listOf(Color(0xFF50555E), Color(0xFF15171B)), center = c, radius = r),
-                radius = r * 0.78f, center = c
-            )
-            val stroke = r * 0.14f
-            drawArc(
-                Pal.edge, 135f, 270f, false,
-                topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2),
-                style = Stroke(stroke, cap = StrokeCap.Round)
-            )
-            drawArc(
-                Pal.blue.copy(alpha = 0.28f), 135f, 270f * value, false,
-                topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2),
-                style = Stroke(stroke * 2.2f, cap = StrokeCap.Round)
-            )
-            drawArc(
-                Pal.blue, 135f, 270f * value, false,
-                topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2),
-                style = Stroke(stroke, cap = StrokeCap.Round)
+                Brush.radialGradient(listOf(Color(0xFF6C7078), Color(0xFF16181B)), center = Offset(c.x - r * 0.2f, c.y - r * 0.25f), radius = r * 0.8f),
+                radius = r * 0.72f, center = c
             )
             val ang = Math.toRadians((135.0 + 270.0 * value))
-            drawLine(
-                Color.White,
-                Offset(c.x + (r * 0.25f * cos(ang)).toFloat(), c.y + (r * 0.25f * sin(ang)).toFloat()),
-                Offset(c.x + (r * 0.66f * cos(ang)).toFloat(), c.y + (r * 0.66f * sin(ang)).toFloat()),
-                strokeWidth = stroke * 0.6f, cap = StrokeCap.Round
+            drawCircle(
+                Color.White, r * 0.07f,
+                Offset(c.x + (r * 0.5f * cos(ang)).toFloat(), c.y + (r * 0.5f * sin(ang)).toFloat())
             )
         }
         Text(label, color = Pal.text, fontSize = fsp(8f), fontWeight = FontWeight.SemiBold, maxLines = 1)
@@ -192,7 +238,7 @@ fun DataWheel(onDelta: (Int) -> Unit, modifier: Modifier = Modifier) {
         drawCircle(Color(0xFF0A0B0D), r * 0.78f, c)
         drawCircle(Brush.sweepGradient(listOf(Color(0xFF3A3E45), Color(0xFF16181C), Color(0xFF4A4F58), Color(0xFF16181C), Color(0xFF3A3E45)), c), r * 0.74f, c)
         val a = Math.toRadians(angle.toDouble() - 45.0)
-        drawCircle(Pal.gold, r * 0.07f, Offset(c.x + (r * 0.55f * cos(a)).toFloat(), c.y + (r * 0.55f * sin(a)).toFloat()))
+        drawCircle(Color.White, r * 0.07f, Offset(c.x + (r * 0.55f * cos(a)).toFloat(), c.y + (r * 0.55f * sin(a)).toFloat()))
     }
 }
 
