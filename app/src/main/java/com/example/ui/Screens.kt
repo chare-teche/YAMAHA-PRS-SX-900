@@ -145,8 +145,8 @@ private fun LabeledSlider(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     valueText: String,
-    onChange: (Float) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onChange: (Float) -> Unit
 ) {
     Row(modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = Pal.text, fontSize = fsp(10f), modifier = Modifier.width(148.dp))
