@@ -1,5 +1,9 @@
 package com.example.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,79 +58,256 @@ import com.example.viewmodel.KeyLayout
 import com.example.viewmodel.Screen
 import com.example.viewmodel.UiState
 
-/** Full-screen pages opened inside the console LCD area. Shows nothing when no page is open. */
+/** Pages that open INSIDE the fixed-size LCD. The LCD never grows: only its content changes. */
 @Composable
 fun LcdPages(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
     val scr = s.screen ?: return
-    val title = when (scr) {
-        Screen.VOICE -> "VOICE SELECT"
-        Screen.STYLE -> "STYLE SELECT"
-        Screen.MIXER -> "SLIDER"
-        Screen.PADS -> "MULTI PAD"
-        Screen.REGIST -> "REGISTRATION MEMORY"
-        Screen.SETTINGS -> "Main Menu  |  Setting"
-        Screen.USER -> "USER LIBRARY"
-    }
-    val isSetting = scr == Screen.SETTINGS
-    val headerBrush = if (isSetting) {
-        Brush.horizontalGradient(listOf(Color(0xFFE0115F), Color(0xFFB80C4B), Color(0xFFE0115F)))
-    } else {
-        Brush.horizontalGradient(listOf(Color(0xFF102446), Color(0xFF1A386B), Color(0xFF102446)))
-    }
-    val frameBorder = if (isSetting) Color(0xFFE0115F) else Pal.gold.copy(alpha = 0.7f)
-    val lcdShape = RoundedCornerShape(6.dp)
-
-    Box(
-        modifier
-            .clip(lcdShape)
-            .background(Brush.verticalGradient(listOf(Color(0xFF090E1A), Color(0xFF04060A))))
-            .border(2.dp, frameBorder, lcdShape)
-            .pointerInput(Unit) { detectTapGestures { } }
-    ) {
-        Column(Modifier.fillMaxSize().padding(4.dp)) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(28.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(headerBrush)
-                    .padding(start = 8.dp, end = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FlagBadge(Modifier.size(width = 18.dp, height = 12.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = title,
-                    color = if (isSetting) Color.White else Pal.goldBright,
-                    fontSize = fsp(11f),
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (isSetting) {
-                    Text(
-                        text = "KEY LEN " + (s.blackHeight * 100).toInt() + "%",
-                        color = Pal.goldBright,
-                        fontSize = fsp(9f),
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
+    Box(modifier.pointerInput(Unit) { detectTapGestures { } }) {
+        when (scr) {
+            Screen.STYLE -> StyleBrowser(vm, s, Modifier.fillMaxSize())
+            Screen.VOICE -> VoiceBrowser(vm, s, Modifier.fillMaxSize())
+            Screen.SETTINGS -> MenuLcd(vm, s, Modifier.fillMaxSize())
+            else -> {
+                val title = when (scr) {
+                    Screen.MIXER -> "SLIDER"
+                    Screen.PADS -> "MULTI PAD"
+                    Screen.REGIST -> "REGISTRATION MEMORY"
+                    else -> "USER LIBRARY"
                 }
-                PanelButton("EXIT", Modifier.width(72.dp).fillMaxHeight(), fontSize = 9f) { vm.openScreen(null) }
+                PageFrame(title, Color(0xFF1A386B), Pal.goldBright, { vm.openScreen(null) }, Modifier.fillMaxSize()) {
+                    when (scr) {
+                        Screen.MIXER -> MixerPage(vm, s)
+                        Screen.PADS -> PadsPage(vm)
+                        Screen.REGIST -> RegistPage(vm, s)
+                        else -> UserPage(vm, s)
+                    }
+                }
             }
-            Spacer(Modifier.height(4.dp))
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                when (scr) {
-                    Screen.VOICE -> VoicePage(vm, s)
-                    Screen.STYLE -> StylePage(vm, s)
-                    Screen.MIXER -> MixerPage(vm, s)
-                    Screen.PADS -> PadsPage(vm)
-                    Screen.REGIST -> RegistPage(vm, s)
-                    Screen.SETTINGS -> SettingsPage(vm, s)
-                    Screen.USER -> UserPage(vm, s)
+        }
+    }
+}
+
+/** Title bar + EXIT + content. Used by the smaller pages (slider, pads, registration, user library, settings). */
+@Composable
+private fun PageFrame(
+    title: String,
+    barColor: Color,
+    titleColor: Color,
+    onExit: () -> Unit,
+    modifier: Modifier,
+    content: @Composable () -> Unit
+) {
+    Column(modifier.background(Brush.verticalGradient(listOf(Color(0xFF090E1A), Color(0xFF04060A))))) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(20.dp * LocalScale.current)
+                .background(Brush.horizontalGradient(listOf(barColor, barColor.copy(alpha = 0.8f), barColor)))
+                .padding(start = 6.dp, end = 1.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FlagBadge(Modifier.size(width = 14.dp, height = 9.dp))
+            Text(
+                text = "  " + title, color = titleColor, fontSize = fsp(8f), fontWeight = FontWeight.ExtraBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+            )
+            PanelButton("EXIT", Modifier.width(48.dp).fillMaxHeight(), fontSize = 7f) { onExit() }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth().padding(3.dp)) { content() }
+    }
+}
+
+// ----------------------------------------------------------------------
+//  Browser in the LCD: category column | 2 x 4 items | navigation column, page tabs P1.. under the items.
+//  Same size as the main page, whatever the number of items.
+// ----------------------------------------------------------------------
+private class BrowserItem(val title: String, val sub: String, val selected: Boolean, val onClick: () -> Unit)
+
+@Composable
+private fun BrowserCell(modifier: Modifier, item: BrowserItem?, accent: Color, cellColor: Color) {
+    if (item == null) { Box(modifier.padding(1.dp)); return }
+    val cb by rememberUpdatedState(item.onClick)
+    var down by remember { mutableStateOf(false) }
+    val sc by animateFloatAsState(if (down) 0.96f else 1f, tween(80), label = "browserPress")
+    Column(
+        modifier
+            .padding(1.dp)
+            .graphicsLayer { scaleX = sc; scaleY = sc }
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (item.selected) Brush.horizontalGradient(listOf(accent, accent.copy(alpha = 0.55f))) else Brush.horizontalGradient(listOf(cellColor, Color(0xFF080F1E))))
+            .border(0.8.dp, if (item.selected) Pal.goldBright else Pal.edge, RoundedCornerShape(3.dp))
+            .pointerInput(Unit) { detectTapGestures(onPress = { down = true; tryAwaitRelease(); down = false }, onTap = { cb() }) }
+            .padding(horizontal = 4.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(item.title, color = if (item.selected) Color.White else Pal.text, fontSize = fsp(7.5f), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(item.sub, color = if (item.selected) Pal.goldBright else Pal.dim, fontSize = fsp(6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun BrowserLcd(
+    info: String,
+    cats: List<String>,
+    cat: Int,
+    onCat: (Int) -> Unit,
+    items: List<BrowserItem>,
+    page: Int,
+    onPage: (Int) -> Unit,
+    accent: Color,
+    cellColor: Color,
+    onBack: () -> Unit,
+    onGear: () -> Unit,
+    onPlus: () -> Unit,
+    modifier: Modifier
+) {
+    val per = 8
+    val pages = maxOf(1, (items.size + per - 1) / per)
+    val cur = page.coerceIn(0, pages - 1)
+    val first = (cur / 5) * 5
+    Row(modifier.background(Brush.verticalGradient(listOf(Color(0xFF0E1B33), Color(0xFF070D1A))))) {
+        Column(Modifier.width(54.dp * LocalScale.current).fillMaxHeight().verticalScroll(rememberScrollState())) {
+            for (ci in cats.indices) {
+                val on = ci == cat
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(24.dp * LocalScale.current)
+                        .padding(1.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (on) accent else Color(0xFF13223D))
+                        .pointerInput(ci) { detectTapGestures { onCat(ci) } }
+                        .padding(horizontal = 3.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(cats[ci], color = if (on) Color.White else Pal.silver, fontSize = fsp(6.8f), fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
+            }
+        }
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            Text(
+                text = info + "   " + (cur + 1) + "/" + pages + "   (" + items.size + ")",
+                color = Pal.goldBright, fontSize = fsp(6.3f), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().padding(start = 3.dp)
+            )
+            for (r in 0..3) {
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    for (c in 0..1) {
+                        BrowserCell(Modifier.weight(1f).fillMaxHeight(), items.getOrNull(cur * per + r * 2 + c), accent, cellColor)
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth().height(18.dp * LocalScale.current)) {
+                for (pi in first until minOf(pages, first + 5)) {
+                    PanelButton("P" + (pi + 1), Modifier.weight(1f).fillMaxHeight(), pi == cur, Pal.gold, fontSize = 7.5f) { onPage(pi) }
+                }
+            }
+        }
+        Column(Modifier.width(34.dp * LocalScale.current).fillMaxHeight()) {
+            PanelButton("BACK", Modifier.weight(1f).fillMaxWidth(), fontSize = 6.5f) { onBack() }
+            PanelButton("MENU", Modifier.weight(1f).fillMaxWidth(), fontSize = 6.5f) { onGear() }
+            PanelButton("UP", Modifier.weight(1f).fillMaxWidth(), fontSize = 7f) { onPage(maxOf(0, cur - 1)) }
+            PanelButton("DOWN", Modifier.weight(1f).fillMaxWidth(), fontSize = 6.5f) { onPage(minOf(pages - 1, cur + 1)) }
+            PanelButton("+", Modifier.weight(1f).fillMaxWidth(), false, Pal.green, fontSize = 12f) { onPlus() }
+        }
+    }
+}
+
+@Composable
+private fun StyleBrowser(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
+    val all = Styles.all
+    val cats = listOf("ALL") + all.map { it.category }.distinct()
+    var cat by remember { mutableIntStateOf(0) }
+    var page by remember { mutableIntStateOf(0) }
+    val safeCat = if (cat < cats.size) cat else 0
+    val idxs = all.indices.filter { safeCat == 0 || all[it].category == cats[safeCat] }
+    val items = idxs.map { i ->
+        BrowserItem(all[i].name, all[i].category + "  " + all[i].tempo + " bpm", s.styleIdx == i) { vm.selectStyle(i) }
+    }
+    BrowserLcd(
+        "STYLE", cats, safeCat, { cat = it; page = 0 }, items, page, { page = it },
+        Pal.blue, Color(0xFF3A1414), { vm.openScreen(null) }, { vm.openScreen(Screen.SETTINGS) }, { vm.requestImportFiles() }, modifier
+    )
+}
+
+@Composable
+private fun VoiceBrowser(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
+    val all = Voices.ALL
+    val cats = listOf("ALL") + all.map { it.category }.distinct()
+    var cat by remember { mutableIntStateOf(0) }
+    var page by remember { mutableIntStateOf(0) }
+    val safeCat = if (cat < cats.size) cat else 0
+    val sel = s.selectedPart
+    val cur = s.parts[sel].voiceIdx
+    val idxs = all.indices.filter { safeCat == 0 || all[it].category == cats[safeCat] }
+    val items = idxs.map { i -> BrowserItem(all[i].name, all[i].category, cur == i) { vm.setPartVoice(sel, i) } }
+    BrowserLcd(
+        "VOICE " + s.parts[sel].name.replace("RIGHT ", "R") + (if (s.kitName.isNotEmpty()) "  kit: " + s.kitName else ""),
+        cats, safeCat, { cat = it; page = 0 }, items, page, { page = it },
+        Pal.blue, Color(0xFF0E2447), { vm.openScreen(null) }, { vm.openScreen(Screen.SETTINGS) }, { vm.requestImportFiles() }, modifier
+    )
+}
+
+// ----------------------------------------------------------------------
+//  MAIN MENU (2 pages of 8 entries, pink title bar) and SETTING inside it
+// ----------------------------------------------------------------------
+private class MenuEntry(val title: String, val sub: String, val color: Color, val active: Boolean, val action: () -> Unit)
+
+@Composable
+private fun MenuLcd(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
+    var inSetting by remember { mutableStateOf(false) }
+    var mpage by remember { mutableIntStateOf(0) }
+    val pink = Color(0xFFD01457)
+    if (inSetting) {
+        PageFrame("Main Menu  |  Setting", pink, Color.White, { inSetting = false }, modifier) { SettingsPage(vm, s) }
+        return
+    }
+    val blue = Color(0xFF1B3F7A)
+    val page1 = listOf(
+        MenuEntry("Style", "Choose a style", blue, false) { vm.openScreen(Screen.STYLE) },
+        MenuEntry("Voice", "Choose voices", blue, false) { vm.openScreen(Screen.VOICE) },
+        MenuEntry("Slider", "Volumes and mute", blue, false) { vm.openScreen(Screen.MIXER) },
+        MenuEntry("Multi Pad", "Drum and rhythm pads", blue, false) { vm.openScreen(Screen.PADS) },
+        MenuEntry("Registration", "8 memories", blue, false) { vm.openScreen(Screen.REGIST) },
+        MenuEntry("User Library", "Folders and files", Color(0xFF14543A), false) { vm.openUserPage() },
+        MenuEntry("Import Files", "+ .STY / .Style / kit", Color(0xFF14543A), false) { vm.requestImportFiles() },
+        MenuEntry("Setting", "App preferences", Color(0xFF7A4A12), false) { inSetting = true }
+    )
+    val page2 = listOf(
+        MenuEntry("Add Folder", "Folder of styles", Color(0xFF14543A), false) { vm.requestAddFolder() },
+        MenuEntry("Tap Tempo", "Tap to set tempo", blue, false) { vm.tapTempo() },
+        MenuEntry("Reset Tempo", "Style tempo", blue, false) { vm.resetTempo() },
+        MenuEntry("Panel Lock", if (s.panelLock) "ON" else "OFF", Color(0xFF7A4A12), s.panelLock) { vm.toggleLock() },
+        MenuEntry("Auto Fill", if (s.autoFill) "ON" else "OFF", blue, s.autoFill) { vm.toggleAutoFill() },
+        MenuEntry("Fade", if (s.fadeActive) "ON" else "OFF", blue, s.fadeActive) { vm.toggleFade() },
+        MenuEntry("Sync Start", if (s.syncStart) "ON" else "OFF", blue, s.syncStart) { vm.toggleSyncStart() },
+        MenuEntry("Sync Stop", if (s.syncStop) "ON" else "OFF", blue, s.syncStop) { vm.toggleSyncStop() }
+    )
+    val list = if (mpage == 0) page1 else page2
+    Column(modifier.background(Color(0xFF05080F))) {
+        Row(
+            Modifier.fillMaxWidth().height(17.dp * LocalScale.current)
+                .background(Brush.horizontalGradient(listOf(pink, Color(0xFFB00F48), pink))).padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Main Menu  " + (mpage + 1) + "/2", color = Color.White, fontSize = fsp(8f), fontWeight = FontWeight.ExtraBold, maxLines = 1, modifier = Modifier.weight(1f))
+            Text(s.chordText, color = Color.White, fontSize = fsp(7f), fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                for (r in 0..3) {
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                        for (c in 0..1) {
+                            val e = list[r * 2 + c]
+                            BrowserCell(Modifier.weight(1f).fillMaxHeight(), BrowserItem(e.title, e.sub, e.active) { e.action() }, e.color, e.color.copy(alpha = 0.55f))
+                        }
+                    }
+                }
+            }
+            Column(Modifier.width(34.dp * LocalScale.current).fillMaxHeight()) {
+                PanelButton("BACK", Modifier.weight(1f).fillMaxWidth(), fontSize = 6.5f) { vm.openScreen(null) }
+                PanelButton("UP", Modifier.weight(1f).fillMaxWidth(), fontSize = 7f) { mpage = 0 }
+                PanelButton("DOWN", Modifier.weight(1f).fillMaxWidth(), fontSize = 6.5f) { mpage = 1 }
             }
         }
     }
@@ -149,7 +330,7 @@ private fun LabeledSlider(
     onChange: (Float) -> Unit
 ) {
     Row(modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = Pal.text, fontSize = fsp(10f), modifier = Modifier.width(148.dp))
+        Text(label, color = Pal.text, fontSize = fsp(10f), modifier = Modifier.width(104.dp))
         Slider(
             value = value.coerceIn(range.start, range.endInclusive),
             onValueChange = onChange,
@@ -163,7 +344,7 @@ private fun LabeledSlider(
             fontSize = fsp(10f),
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.End,
-            modifier = Modifier.width(68.dp)
+            modifier = Modifier.width(52.dp)
         )
     }
 }
@@ -284,156 +465,6 @@ private fun KeyLengthPreview(blackHeight: Float, blackWidth: Float, showLabels: 
                     size = Size(size.width, 6f)
                 )
             }
-        }
-    }
-}
-
-// ----------------------------------------------------------------------
-//  VOICE
-// ----------------------------------------------------------------------
-@Composable
-private fun VoicePage(vm: ArrangerViewModel, s: UiState) {
-    val sel = s.selectedPart
-    val p = s.parts[sel]
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(
-            Modifier
-                .width(260.dp)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(5.dp))
-                .background(Pal.panel)
-                .border(1.dp, Pal.edge, RoundedCornerShape(5.dp))
-                .padding(6.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            Row(Modifier.fillMaxWidth().height(42.dp)) {
-                for (i in 0..3) {
-                    PanelButton(
-                        text = s.parts[i].name.replace("RIGHT ", "R"),
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        active = sel == i,
-                        activeColor = Pal.gold,
-                        fontSize = 10f
-                    ) { vm.selectPart(i) }
-                }
-            }
-            PanelButton(
-                text = if (p.enabled) p.name + " : ON" else p.name + " : OFF",
-                modifier = Modifier.fillMaxWidth().height(42.dp),
-                active = p.enabled,
-                activeColor = Pal.green,
-                fontSize = 10f
-            ) { vm.togglePart(sel) }
-            LabeledSlider("Volume", p.volume, 0f..1f, (p.volume * 100).toInt().toString()) { vm.setPartVolume(sel, it) }
-            LabeledSlider(
-                label = "Pan",
-                value = p.pan,
-                range = -1f..1f,
-                valueText = if (p.pan < -0.05f) "L" + (-p.pan * 100).toInt() else if (p.pan > 0.05f) "R" + (p.pan * 100).toInt() else "C"
-            ) { vm.setPartPan(sel, it) }
-            Row(Modifier.fillMaxWidth().height(42.dp), verticalAlignment = Alignment.CenterVertically) {
-                PanelButton("OCT -", Modifier.weight(1f).fillMaxHeight(), fontSize = 10f) { vm.setPartOctave(sel, p.octave - 1) }
-                Text(
-                    text = "Octave " + (if (p.octave > 0) "+" else "") + p.octave,
-                    color = Pal.goldBright,
-                    fontSize = fsp(10f),
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1.2f)
-                )
-                PanelButton("OCT +", Modifier.weight(1f).fillMaxHeight(), fontSize = 10f) { vm.setPartOctave(sel, p.octave + 1) }
-            }
-            Text(
-                text = "Voices are synthesized in the app (not recorded samples).",
-                color = Pal.dim,
-                fontSize = fsp(8f),
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-        var page by remember { mutableIntStateOf(0) }
-        val per = 8
-        Column(Modifier.weight(1f).fillMaxHeight()) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                val from = page * per
-                val to = minOf(Voices.ALL.size, from + per)
-                items(maxOf(0, to - from)) { k ->
-                    val i = from + k
-                    val v = Voices.ALL[i]
-                    PanelButton(
-                        text = v.name + "\n" + v.category,
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        active = p.voiceIdx == i,
-                        activeColor = Pal.blue,
-                        fontSize = 10f
-                    ) { vm.setPartVoice(sel, i) }
-                }
-            }
-            PageTabs(Voices.ALL.size, per, page, { vm.requestImportFiles() }) { page = it }
-            if (s.kitName.isNotEmpty()) {
-                Text("Drum kit: " + s.kitName, color = Pal.goldBright, fontSize = fsp(8f))
-            }
-        }
-    }
-}
-
-// ----------------------------------------------------------------------
-//  STYLE
-// ----------------------------------------------------------------------
-@Composable
-private fun StylePage(vm: ArrangerViewModel, s: UiState) {
-    val cats = listOf("ALL") + Styles.all.map { it.category }.distinct()
-    var cat by remember { mutableIntStateOf(0) }
-    var page by remember { mutableIntStateOf(0) }
-    val idxs = (0 until Styles.all.size).filter { cat == 0 || cat >= cats.size || Styles.all[it].category == cats[cat] }
-    val per = 8
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Column(Modifier.width(120.dp).fillMaxHeight().verticalScroll(rememberScrollState())) {
-            for (ci in cats.indices) {
-                PanelButton(
-                    text = cats[ci],
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                    active = cat == ci,
-                    activeColor = Pal.gold,
-                    fontSize = 10f
-                ) {
-                    cat = ci
-                    page = 0
-                }
-            }
-        }
-        Column(Modifier.weight(1f).fillMaxHeight()) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                val from = page * per
-                val to = minOf(idxs.size, from + per)
-                items(maxOf(0, to - from)) { k ->
-                    val i = idxs[from + k]
-                    val st = Styles.all[i]
-                    PanelButton(
-                        text = st.name + "\n" + st.category + "  " + st.tempo + " BPM  " + st.timeSig,
-                        modifier = Modifier.fillMaxWidth().height(58.dp),
-                        active = s.styleIdx == i,
-                        activeColor = Pal.blue,
-                        fontSize = 11f
-                    ) { vm.selectStyle(i) }
-                }
-            }
-            PageTabs(idxs.size, per, page, { vm.requestImportFiles() }) { page = it }
-            Text(
-                text = "+ imports .STY / .style files. Imported styles appear under their category in these pages.",
-                color = Pal.dim,
-                fontSize = fsp(8f),
-                modifier = Modifier.padding(top = 4.dp)
-            )
         }
     }
 }

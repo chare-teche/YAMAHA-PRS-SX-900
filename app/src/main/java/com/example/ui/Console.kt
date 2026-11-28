@@ -96,18 +96,27 @@ private fun PanelArea(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
         modifier.background(bodyBrush()).padding(horizontal = 4.dp, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Speaker(Modifier.weight(0.75f).fillMaxHeight())
-        if (s.screen == null) {
-            LeftControls(vm, s, Modifier.weight(1.6f).fillMaxHeight())
-            Column(Modifier.weight(3.15f).fillMaxHeight()) {
-                TripleLcdConsole(vm, s, Modifier.weight(1f).fillMaxWidth())
-                OtsRow(vm, s, Modifier.fillMaxWidth().height(25.dp * LocalScale.current))
+        Speaker(Modifier.weight(0.5f).fillMaxHeight())
+        // The side panels and the LCD never change size or disappear: only the text and pages inside the LCD change.
+        LeftControls(vm, s, Modifier.weight(1.6f).fillMaxHeight())
+        Column(Modifier.weight(3.2f).fillMaxHeight()) {
+            val lcdShape = RoundedCornerShape(6.dp)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(lcdShape)
+                    .background(Color(0xFF04060A))
+                    .border(1.5.dp, Pal.gold.copy(alpha = 0.65f), lcdShape)
+                    .padding(2.dp)
+            ) {
+                if (s.screen == null) MainPageLcd(vm, s, Modifier.fillMaxSize())
+                else LcdPages(vm, s, Modifier.fillMaxSize())
             }
-            RightControls(vm, s, Modifier.weight(1.85f).fillMaxHeight())
-        } else {
-            LcdPages(vm, s, Modifier.weight(6.6f).fillMaxHeight())
+            OtsRow(vm, s, Modifier.fillMaxWidth().height(25.dp * LocalScale.current))
         }
-        Speaker(Modifier.weight(0.75f).fillMaxHeight())
+        RightControls(vm, s, Modifier.weight(1.85f).fillMaxHeight())
+        Speaker(Modifier.weight(0.5f).fillMaxHeight())
     }
 }
 
@@ -216,414 +225,117 @@ private fun TrackBtn(vm: ArrangerViewModel, s: UiState, i: Int, modifier: Modifi
 }
 
 // ----------------------------------------------------------------------
-//  3 Consecutive LCD Panels:
-//    1) MAIN LCD (overview, status, chord, voice parts, quick navigation)
-//    2) STYLE / RHYTHM LCD (style & rhythm selection + P1 P2 P3... pages)
-//    3) VOICE / INSTRUMENT & DRUMS LCD (parts/instruments/drums + P1 P2 P3... pages)
+//  MAIN PAGE of the LCD (the LCD itself has a fixed size; pages open inside it, see Screens.kt)
 // ----------------------------------------------------------------------
 @Composable
-private fun TripleLcdConsole(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
-    var stylePage by remember { mutableIntStateOf(0) }
-    var voicePage by remember { mutableIntStateOf(0) }
-
-    val stylePerPage = 3
-    val styleTotalPages = maxOf(1, (Styles.all.size + stylePerPage - 1) / stylePerPage)
-    val safeStylePage = stylePage.coerceIn(0, styleTotalPages - 1)
-
-    val voicePerPage = 3
-    val voiceTotalPages = maxOf(1, (Voices.ALL.size + voicePerPage - 1) / voicePerPage)
-    val safeVoicePage = voicePage.coerceIn(0, voiceTotalPages - 1)
-
-    val lcdOuterShape = RoundedCornerShape(6.dp)
-    Column(
+private fun LcdCell(
+    modifier: Modifier,
+    selected: Boolean = false,
+    color: Color = Color(0xFF0D1B33),
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val cb by rememberUpdatedState(onClick)
+    var down by remember { mutableStateOf(false) }
+    val sc by animateFloatAsState(if (down) 0.97f else 1f, tween(80), label = "cellPress")
+    Box(
         modifier
-            .clip(lcdOuterShape)
-            .background(Color(0xFF04060A))
-            .border(1.5.dp, Pal.gold.copy(alpha = 0.65f), lcdOuterShape)
-            .padding(2.dp)
-    ) {
-        // Shared top status bar across the 3 consecutive LCD screens
+            .padding(1.dp)
+            .graphicsLayer { scaleX = sc; scaleY = sc }
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (selected) Brush.horizontalGradient(listOf(Color(0xFF1D63B8), Color(0xFF10376B))) else Brush.horizontalGradient(listOf(color, Color(0xFF080F1E))))
+            .border(0.8.dp, if (selected) Pal.goldBright else Pal.edge, RoundedCornerShape(3.dp))
+            .pointerInput(Unit) { detectTapGestures(onPress = { down = true; tryAwaitRelease(); down = false }, onTap = { cb() }) }
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+        contentAlignment = Alignment.CenterStart
+    ) { content() }
+}
+
+/** Main page: style box on the left, the four keyboard parts on the right. Tapping a cell opens its page inside this same LCD. */
+@Composable
+private fun MainPageLcd(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
+    val st = Styles.all.getOrNull(s.styleIdx)
+    val sec = Sec.values()[if (s.running) s.playingSection else s.targetMain]
+    Column(modifier.background(Brush.verticalGradient(listOf(Color(0xFF0C182E), Color(0xFF070E1C))))) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(20.dp * LocalScale.current)
+                .height(15.dp * LocalScale.current)
                 .background(Brush.horizontalGradient(listOf(Color(0xFF102446), Color(0xFF1A386B), Color(0xFF102446))))
-                .padding(horizontal = 6.dp),
+                .padding(horizontal = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FlagBadge(Modifier.size(width = 18.dp, height = 12.dp).padding(end = 2.dp))
+            FlagBadge(Modifier.size(width = 14.dp, height = 9.dp))
             Text(
-                text = "ETHIO YAMAHA",
-                color = Pal.goldBright,
-                fontSize = fsp(8f),
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 3.dp)
-            )
-            Text(
-                text = " | " + Styles.all[s.styleIdx].name,
-                color = Pal.text,
-                fontSize = fsp(7.5f),
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+                "  MAIN PAGE", color = Pal.goldBright, fontSize = fsp(7.5f), fontWeight = FontWeight.ExtraBold,
+                maxLines = 1, modifier = Modifier.weight(1f)
             )
             val pulse by animateFloatAsState(if (s.running && s.beat % 2 == 1) 1f else 0.25f, tween(140), label = "beatPulse")
-            Box(
-                Modifier
-                    .padding(end = 5.dp)
-                    .size(7.dp)
-                    .alpha(pulse)
-                    .clip(CircleShape)
-                    .background(Pal.blueGlow)
-            )
-            Text(
-                text = s.chordText,
-                color = Pal.goldBright,
-                fontSize = fsp(7.5f),
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 1
-            )
+            Box(Modifier.padding(end = 4.dp).size(6.dp).alpha(pulse).clip(CircleShape).background(Pal.blueGlow))
+            Text(sec.label + "   " + s.chordText, color = Pal.goldBright, fontSize = fsp(7f), fontWeight = FontWeight.Bold, maxLines = 1)
         }
-
-        // Three consecutive LCD screens side-by-side
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(top = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            MainOverviewLcd(vm, s, Modifier.weight(1.05f).fillMaxHeight())
-            StyleRhythmLcd(
-                vm = vm,
-                s = s,
-                page = safeStylePage,
-                totalPages = styleTotalPages,
-                perPage = stylePerPage,
-                onPageChange = { stylePage = it },
-                modifier = Modifier.weight(1f).fillMaxHeight()
-            )
-            VoiceInstrumentDrumLcd(
-                vm = vm,
-                s = s,
-                page = safeVoicePage,
-                totalPages = voiceTotalPages,
-                perPage = voicePerPage,
-                onPageChange = { voicePage = it },
-                modifier = Modifier.weight(1f).fillMaxHeight()
-            )
+        Row(Modifier.fillMaxWidth().weight(1f)) {
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                LcdCell(Modifier.weight(2f).fillMaxWidth(), color = Color(0xFF3A1414), onClick = { vm.openScreen(Screen.STYLE) }) {
+                    Column {
+                        Text(st?.name ?: "Style", color = Pal.text, fontSize = fsp(8f), fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("tempo " + s.tempo + " bpm", color = Pal.silver, fontSize = fsp(6.5f), maxLines = 1)
+                        Text("meter " + s.timeSig + "   " + (st?.category ?: ""), color = Pal.silver, fontSize = fsp(6.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                LcdCell(Modifier.weight(1f).fillMaxWidth(), onClick = { vm.openScreen(Screen.REGIST) }) {
+                    Column {
+                        Text("REGIST " + (s.activeReg + 1), color = Pal.green, fontSize = fsp(7.5f), fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text("Registration Memory", color = Pal.dim, fontSize = fsp(6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                LcdCell(Modifier.weight(1f).fillMaxWidth(), onClick = { vm.openUserPage() }) {
+                    Column {
+                        Text("User Library", color = Pal.blueGlow, fontSize = fsp(7.5f), fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text("styles, kits, folders", color = Pal.dim, fontSize = fsp(6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            Column(Modifier.weight(1.7f).fillMaxHeight()) {
+                for (i in 0..3) {
+                    val p = s.parts[i]
+                    val vName = Voices.ALL.getOrNull(p.voiceIdx)?.name ?: "Voice"
+                    LcdCell(
+                        Modifier.weight(1f).fillMaxWidth(), selected = s.selectedPart == i,
+                        onClick = { vm.selectPart(i); vm.openScreen(Screen.VOICE) }
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    vName, color = if (p.enabled) Color(0xFF8FD0FF) else Pal.dim, fontSize = fsp(8f), fontWeight = FontWeight.Bold,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    p.name.replace("RIGHT ", "R") + "   octave " + p.octave + "   vol " + (p.volume * 100).toInt(),
+                                    color = Pal.silver, fontSize = fsp(6.3f), maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Box(
+                                Modifier
+                                    .padding(start = 3.dp)
+                                    .width(5.dp)
+                                    .fillMaxHeight(0.8f)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(if (p.enabled) Pal.green else Color(0xFF2A3347))
+                                    .pointerInput(i) { detectTapGestures { vm.togglePart(i) } }
+                            )
+                        }
+                    }
+                }
+            }
         }
-
-        // Bottom telemetry strip
-        val sec = Sec.values()[if (s.running) s.playingSection else s.targetMain]
         Text(
-            text = sec.label + "  |  " + s.tempo + " BPM (" + s.timeSig + ")  |  " +
-                String.format("%03d.%d", s.measure, s.beat) + "  |  " +
-                (if (s.audioOk) "AUDIO OK" else "AUDIO OFF") + "  V" + s.voices + "  U" + s.underruns +
-                (if (s.transpose != 0) "  TR" + (if (s.transpose > 0) "+" else "") + s.transpose else "") +
-                (if (s.panelLock) "  LOCKED" else "") + "  |  " + s.banner,
+            text = (if (s.running) "RUN  " else "STOP  ") + s.tempo + " BPM (" + s.timeSig + ")  " + String.format("%03d.%d", s.measure, s.beat) +
+                "  " + (if (s.audioOk) "AUDIO OK" else "AUDIO OFF") + "  V" + s.voices + "  " + s.banner,
             color = if (s.audioOk && s.underruns == 0) Pal.green else Pal.orange,
-            fontSize = fsp(6.5f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 1.dp)
-                .background(Pal.navyDeep)
-                .padding(horizontal = 4.dp, vertical = 1.dp)
+            fontSize = fsp(6f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().background(Pal.navyDeep).padding(horizontal = 4.dp, vertical = 1.dp)
         )
-    }
-}
-
-/** LCD 1 of 3: Main status, active parts (R1/R2/R3/LEFT), and workstation shortcuts. */
-@Composable
-private fun MainOverviewLcd(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
-    val activeStyle = Styles.all[s.styleIdx]
-    val sec = Sec.values()[if (s.running) s.playingSection else s.targetMain]
-    Column(
-        modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF0C182E), Color(0xFF070E1C))))
-            .border(1.dp, Pal.blue.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
-            .padding(3.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("MAIN LCD", color = Pal.blueGlow, fontSize = fsp(6.8f), fontWeight = FontWeight.ExtraBold, maxLines = 1)
-            Text(sec.label, color = Pal.goldBright, fontSize = fsp(6.8f), fontWeight = FontWeight.Bold, maxLines = 1)
-        }
-        LcdTile(
-            title = "ACTIVE STYLE",
-            line1 = activeStyle.name,
-            line2 = activeStyle.category + " • " + s.tempo + " BPM",
-            c1 = Color(0xFF15458A),
-            c2 = Color(0xFF0B254D),
-            modifier = Modifier.weight(1.1f).fillMaxWidth()
-        ) { vm.openScreen(Screen.STYLE) }
-
-        Column(Modifier.weight(1.4f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            for (i in 0..3) {
-                val p = s.parts[i]
-                val vName = Voices.ALL.getOrNull(p.voiceIdx)?.name ?: "Voice"
-                val tag = p.name.replace("RIGHT ", "R")
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(if (s.selectedPart == i) Pal.blue.copy(alpha = 0.25f) else Color(0xFF0D1B33))
-                        .border(0.5.dp, if (s.selectedPart == i) Pal.gold else Pal.edge, RoundedCornerShape(2.dp))
-                        .padding(horizontal = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = tag,
-                        color = if (p.enabled) Pal.goldBright else Pal.dim,
-                        fontSize = fsp(6.5f),
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        modifier = Modifier.width(26.dp)
-                    )
-                    Text(
-                        text = vName,
-                        color = if (p.enabled) Pal.text else Pal.dim,
-                        fontSize = fsp(6.5f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = if (p.enabled) "ON" else "OFF",
-                        color = if (p.enabled) Pal.green else Pal.red,
-                        fontSize = fsp(6f),
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-
-        Row(Modifier.fillMaxWidth().height(18.dp * LocalScale.current), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            PanelButton("SLIDER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.MIXER, Pal.blue, fontSize = 6.5f) { vm.openScreen(Screen.MIXER) }
-            PanelButton("PADS", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.PADS, Pal.blue, fontSize = 6.5f) { vm.openScreen(Screen.PADS) }
-            PanelButton("USER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.USER, Pal.gold, fontSize = 6.5f) { vm.openUserPage() }
-        }
-    }
-}
-
-/** LCD 2 of 3: Style & Rhythm selector with P1, P2, P3... page tabs. */
-@Composable
-private fun StyleRhythmLcd(
-    vm: ArrangerViewModel,
-    s: UiState,
-    page: Int,
-    totalPages: Int,
-    perPage: Int,
-    onPageChange: (Int) -> Unit,
-    modifier: Modifier
-) {
-    val start = page * perPage
-    val end = minOf(Styles.all.size, start + perPage)
-    Column(
-        modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF0E1B33), Color(0xFF070D1A))))
-            .border(1.dp, Pal.gold.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-            .padding(3.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("STYLE / RHYTHM", color = Pal.goldBright, fontSize = fsp(6.8f), fontWeight = FontWeight.ExtraBold, maxLines = 1)
-            Text("ALL STYLES", color = Pal.silver, fontSize = fsp(6f), maxLines = 1)
-        }
-
-        Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            for (idx in start until end) {
-                val st = Styles.all[idx]
-                val selected = s.styleIdx == idx
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            if (selected) Brush.horizontalGradient(listOf(Color(0xFF1D63B8), Color(0xFF10376B)))
-                            else Brush.horizontalGradient(listOf(Color(0xFF12203A), Color(0xFF0B1426)))
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = if (selected) Pal.goldBright else Pal.edge,
-                            shape = RoundedCornerShape(3.dp)
-                        )
-                        .pointerInput(idx) { detectTapGestures { vm.selectStyle(idx) } }
-                        .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = st.name,
-                            color = if (selected) Color.White else Pal.text,
-                            fontSize = fsp(7.5f),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = st.category + " • " + st.tempo + " BPM",
-                            color = if (selected) Pal.goldBright else Pal.dim,
-                            fontSize = fsp(6f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    if (selected) {
-                        Text("ACT", color = Pal.goldBright, fontSize = fsp(6f), fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                    }
-                }
-            }
-        }
-
-        // P1, P2, P3... page tabs for Style/Rhythm
-        Row(
-            Modifier.fillMaxWidth().height(17.dp * LocalScale.current).horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            for (pIdx in 0 until totalPages) {
-                val isCur = pIdx == page
-                Box(
-                    Modifier
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(if (isCur) Pal.gold else Color(0xFF13223D))
-                        .border(0.8.dp, if (isCur) Pal.goldBright else Pal.edge, RoundedCornerShape(2.dp))
-                        .pointerInput(pIdx) { detectTapGestures { onPageChange(pIdx) } }
-                        .padding(horizontal = 5.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "P" + (pIdx + 1),
-                        color = if (isCur) Color(0xFF070A10) else Pal.silver,
-                        fontSize = fsp(6.5f),
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** LCD 3 of 3: Voice / Instrument & Drums selector + part selector + P1 P2 P3... page tabs. */
-@Composable
-private fun VoiceInstrumentDrumLcd(
-    vm: ArrangerViewModel,
-    s: UiState,
-    page: Int,
-    totalPages: Int,
-    perPage: Int,
-    onPageChange: (Int) -> Unit,
-    modifier: Modifier
-) {
-    val start = page * perPage
-    val end = minOf(Voices.ALL.size, start + perPage)
-    val activeVoiceIdx = s.parts[s.selectedPart].voiceIdx
-
-    Column(
-        modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF0E1B33), Color(0xFF070D1A))))
-            .border(1.dp, Pal.blue.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
-            .padding(3.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("VOICE / DRUMS", color = Pal.blueGlow, fontSize = fsp(6.8f), fontWeight = FontWeight.ExtraBold, maxLines = 1)
-            Text(
-                text = s.parts[s.selectedPart].name.replace("RIGHT ", "R"),
-                color = Pal.goldBright,
-                fontSize = fsp(6.5f),
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-        }
-
-        Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            for (idx in start until end) {
-                val v = Voices.ALL[idx]
-                val selected = activeVoiceIdx == idx
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            if (selected) Brush.horizontalGradient(listOf(Color(0xFF1958A8), Color(0xFF0E2D59)))
-                            else Brush.horizontalGradient(listOf(Color(0xFF12203A), Color(0xFF0B1426)))
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = if (selected) Pal.blueGlow else Pal.edge,
-                            shape = RoundedCornerShape(3.dp)
-                        )
-                        .pointerInput(idx) { detectTapGestures { vm.setPartVoice(s.selectedPart, idx) } }
-                        .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = v.name,
-                            color = if (selected) Color.White else Pal.text,
-                            fontSize = fsp(7.5f),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = v.category,
-                            color = if (selected) Pal.goldBright else Pal.dim,
-                            fontSize = fsp(6f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    if (selected) {
-                        Text("SEL", color = Pal.blueGlow, fontSize = fsp(6f), fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                    }
-                }
-            }
-        }
-
-        // P1, P2, P3... page tabs for Voice / Instruments / Drums
-        Row(
-            Modifier.fillMaxWidth().height(17.dp * LocalScale.current).horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            for (pIdx in 0 until totalPages) {
-                val isCur = pIdx == page
-                Box(
-                    Modifier
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(if (isCur) Pal.blue else Color(0xFF13223D))
-                        .border(0.8.dp, if (isCur) Pal.blueGlow else Pal.edge, RoundedCornerShape(2.dp))
-                        .pointerInput(pIdx) { detectTapGestures { onPageChange(pIdx) } }
-                        .padding(horizontal = 5.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "P" + (pIdx + 1),
-                        color = if (isCur) Color.White else Pal.silver,
-                        fontSize = fsp(6.5f),
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
     }
 }
 
