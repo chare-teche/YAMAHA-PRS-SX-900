@@ -61,7 +61,7 @@ fun LcdPages(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
     val title = when (scr) {
         Screen.VOICE -> "VOICE SELECT"
         Screen.STYLE -> "STYLE SELECT"
-        Screen.MIXER -> "SLIDER MIXER"
+        Screen.MIXER -> "SLIDER"
         Screen.PADS -> "MULTI PAD"
         Screen.REGIST -> "REGISTRATION MEMORY"
         Screen.SETTINGS -> "Main Menu  |  Setting"
@@ -689,10 +689,9 @@ private fun SettingsPage(vm: ArrangerViewModel, s: UiState) {
             PanelButton("OPEN USER LIBRARY", Modifier.weight(1f).fillMaxHeight(), fontSize = 10f) { vm.openUserPage() }
         }
         Text(
-            text = "Yamaha .STY (and any style that is a MIDI file with a CASM chunk, whatever its extension): imported and played. " +
-                "ORG .style / .template / .music and Yamaha or ORG .set packages: the file is read, its real structure is shown " +
-                "(chunks, ZIP contents) and the original is kept unchanged, but they cannot be played yet because their format " +
-                "is not confirmed. Pick the file here and send the report text to continue the work.",
+            text = "Yamaha .STY (and any MIDI style with a CASM chunk) and Music Studio Rhythm .Style files are imported and played with the app's own voices. " +
+                "The sounds stored inside a .Style file are not played yet, and the time signature is assumed to be 4/4. " +
+                "Other formats (.set, .template, .music) are read and reported only; the original file is kept unchanged.",
             color = Pal.dim,
             fontSize = fsp(8f),
             modifier = Modifier.padding(top = 4.dp)

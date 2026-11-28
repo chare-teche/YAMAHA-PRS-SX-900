@@ -406,7 +406,7 @@ private fun MainOverviewLcd(vm: ArrangerViewModel, s: UiState, modifier: Modifie
         }
 
         Row(Modifier.fillMaxWidth().height(18.dp * LocalScale.current), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            PanelButton("MIXER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.MIXER, Pal.blue, fontSize = 6.5f) { vm.openScreen(Screen.MIXER) }
+            PanelButton("SLIDER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.MIXER, Pal.blue, fontSize = 6.5f) { vm.openScreen(Screen.MIXER) }
             PanelButton("PADS", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.PADS, Pal.blue, fontSize = 6.5f) { vm.openScreen(Screen.PADS) }
             PanelButton("USER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.USER, Pal.gold, fontSize = 6.5f) { vm.openUserPage() }
         }
@@ -686,7 +686,7 @@ private fun RightControls(vm: ArrangerViewModel, s: UiState, modifier: Modifier)
                 Row(Modifier.fillMaxWidth().weight(1f)) {
                     HwButton("STYLE", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.STYLE) { vm.openScreen(Screen.STYLE) }
                     HwButton("VOICE", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.VOICE) { vm.openScreen(Screen.VOICE) }
-                    HwButton("MIXER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.MIXER) { vm.openScreen(Screen.MIXER) }
+                    HwButton("SLIDER", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.MIXER) { vm.openScreen(Screen.MIXER) }
                     HwButton("PADS", Modifier.weight(1f).fillMaxHeight(), s.screen == Screen.PADS) { vm.openScreen(Screen.PADS) }
                 }
                 Row(Modifier.fillMaxWidth().weight(1f)) {
