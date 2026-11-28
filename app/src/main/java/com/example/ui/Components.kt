@@ -1,6 +1,8 @@
 package com.example.ui
 
 import android.graphics.Paint
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -79,9 +82,11 @@ fun PanelButton(
     val top = if (pressed) Color(0xFF454B55) else Color(0xFF30343B)
     val bottom = if (pressed) Color(0xFF2A2E34) else Color(0xFF1D2025)
     val shape = RoundedCornerShape(4.dp)
+    val sc by animateFloatAsState(if (pressed) 0.93f else 1f, tween(80), label = "btnPress")
     Box(
         modifier
             .padding(1.dp)
+            .graphicsLayer { scaleX = sc; scaleY = sc }
             .clip(shape)
             .background(Brush.verticalGradient(listOf(top, bottom)))
             .border(1.dp, if (active) activeColor else Pal.edge, shape)

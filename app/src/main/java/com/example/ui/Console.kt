@@ -5,7 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,7 +68,6 @@ fun ConsoleApp(vm: ArrangerViewModel) {
                     StripRow(vm, s, Modifier.fillMaxWidth().height(h * 0.115f))
                     KeyboardArea(vm, s, Modifier.fillMaxWidth().height(h * s.keyHeight))
                 }
-                OverlayHost(vm, s)
             }
         }
     }
@@ -82,12 +87,17 @@ private fun PanelArea(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Speaker(Modifier.weight(0.8f).fillMaxHeight())
-        LeftControls(vm, s, Modifier.weight(1.55f).fillMaxHeight())
-        Column(Modifier.weight(2.7f).fillMaxHeight()) {
-            Lcd(vm, s, Modifier.weight(1f).fillMaxWidth())
-            OtsRow(vm, s, Modifier.fillMaxWidth().height(26.dp * LocalScale.current))
+        if (s.screen == null) {
+            LeftControls(vm, s, Modifier.weight(1.55f).fillMaxHeight())
+            Column(Modifier.weight(2.7f).fillMaxHeight()) {
+                Lcd(vm, s, Modifier.weight(1f).fillMaxWidth())
+                OtsRow(vm, s, Modifier.fillMaxWidth().height(26.dp * LocalScale.current))
+            }
+            RightControls(vm, s, Modifier.weight(1.9f).fillMaxHeight())
+        } else {
+            // a page is open: the LCD takes the whole control area (all pages live inside the LCD)
+            LcdPages(vm, s, Modifier.weight(6.15f).fillMaxHeight())
         }
-        RightControls(vm, s, Modifier.weight(1.9f).fillMaxHeight())
         Speaker(Modifier.weight(0.8f).fillMaxHeight())
     }
 }
@@ -183,6 +193,8 @@ private fun Lcd(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
         ) {
             Text("ETHIO YAMAHA", color = Pal.gold, fontSize = fsp(8f), fontWeight = FontWeight.ExtraBold, maxLines = 1)
             Text("   Main Menu", color = Color.White, fontSize = fsp(8f), fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))
+            val pulse by animateFloatAsState(if (s.running && s.beat % 2 == 1) 1f else 0.2f, tween(140), label = "beat")
+            Box(Modifier.padding(end = 4.dp).size(7.dp).alpha(pulse).clip(CircleShape).background(Color(0xFF7FD6FF)))
             Text(s.chordText, color = Color.White, fontSize = fsp(8f), fontWeight = FontWeight.Bold, maxLines = 1)
         }
         val blue = Color(0xFF1E5FB5)
@@ -217,9 +229,12 @@ private fun Lcd(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
 @Composable
 private fun MenuItem(title: String, sub: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
     val cb by rememberUpdatedState(onClick)
+    var down by remember { mutableStateOf(false) }
+    val sc by animateFloatAsState(if (down) 0.94f else 1f, tween(90), label = "menuPress")
     Column(
-        modifier.fillMaxHeight().padding(1.dp).background(Brush.verticalGradient(listOf(color, color.copy(alpha = 0.55f))))
-            .pointerInput(Unit) { detectTapGestures { cb() } }.padding(horizontal = 4.dp),
+        modifier.fillMaxHeight().padding(1.dp).graphicsLayer { scaleX = sc; scaleY = sc }
+            .background(Brush.verticalGradient(listOf(color.copy(alpha = if (down) 1f else 0.92f), color.copy(alpha = if (down) 0.8f else 0.55f))))
+            .pointerInput(Unit) { detectTapGestures(onPress = { down = true; tryAwaitRelease(); down = false }, onTap = { cb() }) }.padding(horizontal = 4.dp),
         verticalArrangement = Arrangement.Center
     ) {
         Text(title, color = Color.White, fontSize = fsp(10f), fontWeight = FontWeight.Bold, maxLines = 1)
@@ -351,7 +366,7 @@ private fun StripRow(vm: ArrangerViewModel, s: UiState, modifier: Modifier) {
             PanelButton("MEM", Modifier.weight(1f).fillMaxHeight(), s.memoryArmed, Pal.gold, fontSize = 7f) { vm.toggleMemoryArm() }
         }
         Group("PADS", 4f) {
-            val pads = listOf(49, 36, 38, 54)
+            val pads = listOf(82, 36, 38, 54)
             for (i in 0..3) PanelButton((i + 1).toString(), Modifier.weight(1f).fillMaxHeight(), fontSize = 9f) { vm.padHit(pads[i]) }
         }
     }

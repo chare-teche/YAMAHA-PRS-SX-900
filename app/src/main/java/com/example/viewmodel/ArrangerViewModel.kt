@@ -9,6 +9,7 @@ import com.example.formats.FileInspector
 import com.example.formats.FormatException
 import com.example.formats.Kind
 import com.example.formats.Library
+import com.example.formats.MusicStudioStyle
 import com.example.formats.StyleConverter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -622,7 +623,8 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
                 val files = libDir().listFiles()?.sortedBy { it.name } ?: emptyList()
                 for (f in files) {
                     try {
-                        val st = StyleConverter.fromBytes(f.readBytes(), f.name)
+                        val fb = f.readBytes()
+                        val st = if (MusicStudioStyle.isStyle(fb)) MusicStudioStyle.fromBytes(fb, f.name) else StyleConverter.fromBytes(fb, f.name)
                         val idx = Styles.addImported(st)
                         importedKeys["file:" + f.name] = idx
                     } catch (e: Exception) { /* a damaged saved file is skipped */ }
@@ -707,8 +709,8 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
     fun userPick(e: UserEntry) {
         val u = _ui.value.user
         when (e.kind) {
-            Kind.YAMAHA_STY -> importStyle(Library.docUri(Uri.parse(u.tree), e.docId), e.name, "doc:" + e.docId)
-            Kind.ORG_STYLE, Kind.SET -> inspectFile(Library.docUri(Uri.parse(u.tree), e.docId), e.name, "doc:" + e.docId)
+            Kind.YAMAHA_STY, Kind.ORG_STYLE -> importStyle(Library.docUri(Uri.parse(u.tree), e.docId), e.name, "doc:" + e.docId)
+            Kind.SET -> inspectFile(Library.docUri(Uri.parse(u.tree), e.docId), e.name, "doc:" + e.docId)
             Kind.MIDI -> userMsg(e.name + ": MIDI song playback is not in this version yet.")
             Kind.PAD -> userMsg(e.name + ": Multi Pad banks (.pad) are not in this version yet.")
             Kind.REGIST -> userMsg(e.name + ": registration banks (.RGT) are not in this version yet.")
@@ -724,9 +726,9 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
         for (uri in uris) {
             val name = Library.displayName(cr, uri)
             val k = Library.kindOf(name)
-            if (k == Kind.YAMAHA_STY) importStyle(uri, name, "uri:" + uri)
+            if (k == Kind.YAMAHA_STY || k == Kind.ORG_STYLE) importStyle(uri, name, "uri:" + uri)
             else if (k == Kind.INSTRUMENT) importKit(uri, name)
-            else if (k == Kind.ORG_STYLE || k == Kind.SET || k == Kind.OTHER) inspectFile(uri, name, "uri:" + uri)
+            else if (k == Kind.SET || k == Kind.OTHER) inspectFile(uri, name, "uri:" + uri)
             else userMsg(name + ": this file type cannot be imported in this version.")
         }
     }
@@ -796,7 +798,7 @@ class ArrangerViewModel(app: Application) : AndroidViewModel(app) {
             val res = withContext(Dispatchers.IO) {
                 runCatching {
                     val bytes = Library.readBytes(getApplication<Application>().contentResolver, uri)
-                    val st = StyleConverter.fromBytes(bytes, name)
+                    val st = if (MusicStudioStyle.isStyle(bytes)) MusicStudioStyle.fromBytes(bytes, name) else StyleConverter.fromBytes(bytes, name)
                     // keep a copy so the style is still there after restart
                     File(libDir(), safeName(name)).writeBytes(bytes)
                     st

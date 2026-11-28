@@ -9,7 +9,7 @@ import java.io.ByteArrayOutputStream
 /** What a file in a user folder is, judged by name and (for styles) content. */
 enum class Kind(val label: String, val supported: Boolean) {
     YAMAHA_STY("STY", true),
-    ORG_STYLE("ORG", false),
+    ORG_STYLE("STYLE", true),
     MIDI("MID", false),
     PAD("PAD", false),
     REGIST("RGT", false),
